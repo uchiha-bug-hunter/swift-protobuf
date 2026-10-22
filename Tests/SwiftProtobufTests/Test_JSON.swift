@@ -847,6 +847,29 @@ final class Test_JSON: XCTestCase, PBTestHelpers {
         assertJSONDecodeFails("{\"optionalBytes\":\"-_+\\/\"}")
     }
 
+    func testOptionalBytes_tooFewDigits() throws {
+        // Strings with fewer than two base-64 digits decode no bytes, but
+        // must still be validated and fully consumed.
+        assertJSONDecodeSucceeds("{\"optionalBytes\":\" \"}") { $0.optionalBytes == Data() }
+        assertJSONDecodeSucceeds("{\"optionalBytes\":\"   \"}") { $0.optionalBytes == Data() }
+        assertJSONDecodeFails("{\"optionalBytes\":\"A\"}")
+        assertJSONDecodeFails("{\"optionalBytes\":\"%\"}")
+        assertJSONDecodeFails("{\"optionalBytes\":\"=\"}")
+        assertJSONDecodeFails("{\"optionalBytes\":\"==\"}")
+        assertJSONDecodeFails("{\"optionalBytes\":\"\\/\"}")
+        assertJSONDecodeFails("{\"optionalBytes\":\"%}\"}")
+
+        // The scanner must not resume inside the string: this is not valid
+        // JSON, and the "," and "" keys must not appear in the map.
+        let invalid = [
+            "{\"mapStringBytes\":{\"a\":\"%,\",\":\"\"}}",
+            "{\"mapStringBytes\":{\"a\":\"%,\"\":\"QQ\"}}",
+        ]
+        for json in invalid {
+            XCTAssertThrowsError(try SwiftProtoTesting_Test3_TestAllTypesProto3(jsonString: json), json)
+        }
+    }
+
     func testOptionalBytes_escapes() {
         // Many JSON encoders escape "/":
         assertJSONDecodeSucceeds("{\"optionalBytes\":\"\\/w==\"}") {

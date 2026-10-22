@@ -185,6 +185,21 @@ private func parseBytes(
         throw JSONDecodingError.malformedString
     }
 
+    // Fewer than two digits can't encode any bytes, so the pass below
+    // would not run; it would neither validate the characters nor move
+    // past the closing quote. Only spaces are valid here.
+    if rawChars < 2 {
+        var i = digitsStart
+        while i != index {
+            if source[i] != asciiSpace {
+                throw JSONDecodingError.malformedString
+            }
+            source.formIndex(after: &i)
+        }
+        source.formIndex(after: &index)
+        return Data()
+    }
+
     // Allocate a Data object of exactly the right size
     var value = Data(count: rawChars * 3 / 4)
 
