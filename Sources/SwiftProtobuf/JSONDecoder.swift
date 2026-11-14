@@ -24,6 +24,15 @@ internal struct JSONDecoder: Decoder {
     private var fieldCount = 0
     private var isMapKey = false
     private var fieldNameMap: _NameMap?
+    // Field numbers already set from this JSON object. The reference parser
+    // rejects a field that appears more than once in the same object
+    // (json/internal/parser.cc ParseField, RecordAsSeen), including the
+    // same field spelled with its JSON name and its proto name.
+    private var seenFieldNumbers = Set<Int>()
+    // The field whose value is a 'null' token. 'null' leaves a field unset,
+    // so it only counts as setting the field for google.protobuf.Value and
+    // google.protobuf.NullValue, which decode it as a value.
+    private var nullValuedFieldNumber: Int?
 
     internal var options: JSONDecodingOptions {
         scanner.options
@@ -65,9 +74,31 @@ internal struct JSONDecoder: Decoder {
         )
         if let fieldNumber = fieldNumber {
             fieldCount += 1
+            if try scanner.peekOneCharacter() == "n" {
+                // 'null' is left for the field decoder to consume.
+                nullValuedFieldNumber = fieldNumber
+            } else {
+                nullValuedFieldNumber = nil
+                try recordFieldSeen(fieldNumber)
+            }
             return fieldNumber
         }
         return nil
+    }
+
+    private mutating func recordFieldSeen(_ fieldNumber: Int) throws {
+        guard seenFieldNumbers.insert(fieldNumber).inserted else {
+            throw SwiftProtobufError.JSONDecoding.duplicateField()
+        }
+    }
+
+    /// Called when 'null' decoded to a value (google.protobuf.Value or
+    /// google.protobuf.NullValue), which sets the field like any other value.
+    private mutating func recordNullValuedFieldSeen() throws {
+        if let fieldNumber = nullValuedFieldNumber {
+            nullValuedFieldNumber = nil
+            try recordFieldSeen(fieldNumber)
+        }
     }
 
     mutating func decodeSingularFloatField(value: inout Float) throws {
@@ -483,6 +514,9 @@ internal struct JSONDecoder: Decoder {
         if scanner.skipOptionalNull() {
             if let customDecodable = E.self as? any _CustomJSONCodable.Type {
                 value = try customDecodable.decodedFromJSONNull() as? E
+                if value != nil {
+                    try recordNullValuedFieldSeen()
+                }
                 return
             }
             value = nil
@@ -499,6 +533,7 @@ internal struct JSONDecoder: Decoder {
         if scanner.skipOptionalNull() {
             if let customDecodable = E.self as? any _CustomJSONCodable.Type {
                 value = try customDecodable.decodedFromJSONNull() as! E
+                try recordNullValuedFieldSeen()
                 return
             }
             value = E()
@@ -563,6 +598,9 @@ internal struct JSONDecoder: Decoder {
             if M.self is any _CustomJSONCodable.Type {
                 value =
                     try (M.self as! any _CustomJSONCodable.Type).decodedFromJSONNull() as? M
+                if value != nil {
+                    try recordNullValuedFieldSeen()
+                }
                 return
             }
             // All other message field types treat 'null' as an unset
