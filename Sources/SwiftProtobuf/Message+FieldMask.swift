@@ -136,7 +136,9 @@ extension Message where Self: Equatable, Self: _ProtoNameProviding {
     // TODO: Re-implement using clear fields instead of copying message
 
     /// Removes from 'message' any field that is not represented in the given
-    /// FieldMask. If the FieldMask is empty, does nothing.
+    /// FieldMask. If the FieldMask is empty, does nothing. Paths that don't
+    /// name a field of the message keep nothing, matching C++
+    /// `FieldMaskUtil::TrimMessage`.
     ///
     /// - Parameter fieldMask: FieldMask specifies which fields should be kept.
     /// - Returns: Boolean determines if the message is modified
@@ -144,9 +146,6 @@ extension Message where Self: Equatable, Self: _ProtoNameProviding {
     public mutating func trim(
         keeping fieldMask: Google_Protobuf_FieldMask
     ) -> Bool {
-        if !fieldMask.isValid(for: Self.self) {
-            return false
-        }
         if fieldMask.paths.isEmpty {
             return false
         }

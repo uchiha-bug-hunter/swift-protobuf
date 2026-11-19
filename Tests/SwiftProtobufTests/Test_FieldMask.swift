@@ -1167,9 +1167,36 @@ final class Test_FieldMask: XCTestCase, PBTestHelpers {
         let r3 = message.trim(keeping: .init(protoPaths: "optional_nested_message.bb"))
         XCTAssertFalse(r3)
 
-        // Checks trim to be unsuccessful with an invalid fieldMask.
+        // Checks trim with an invalid fieldMask keeps no fields.
         let r4 = message.trim(keeping: .init(protoPaths: "invalid_path"))
-        XCTAssertFalse(r4)
+        XCTAssertTrue(r4)
+        XCTAssertEqual(message, SwiftProtoTesting_TestAllTypes())
+    }
+
+    // Paths that don't name a field are ignored rather than disabling the
+    // trim, matching C++ FieldMaskUtil::TrimMessage.
+    func testTrimFieldsOfMessageWithInvalidPath() throws {
+        let original = SwiftProtoTesting_TestAllTypes.with { model in
+            model.optionalInt32 = 1
+            model.optionalInt64 = 2
+            model.optionalNestedMessage = .with { nested in
+                nested.bb = 3
+            }
+        }
+
+        var message = original
+        XCTAssertTrue(message.trim(keeping: .init(protoPaths: "optional_int32", "invalid_path")))
+        XCTAssertEqual(message, .with { $0.optionalInt32 = 1 })
+
+        // intersect() keeps a sub-path of an allowed field without checking it
+        // against the type; it must not let fields outside the allowed mask through.
+        let allowed = Google_Protobuf_FieldMask(protoPaths: "optional_nested_message")
+        let requested = Google_Protobuf_FieldMask(protoPaths: "optional_nested_message.invalid_path")
+        message = original
+        XCTAssertTrue(message.trim(keeping: allowed.intersect(requested)))
+        XCTAssertFalse(message.hasOptionalInt32)
+        XCTAssertFalse(message.hasOptionalInt64)
+        XCTAssertFalse(message.optionalNestedMessage.hasBb)
     }
 
     // Checks trim functionality for field masks when applies on a extensible message.
