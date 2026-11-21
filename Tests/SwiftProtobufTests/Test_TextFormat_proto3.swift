@@ -413,6 +413,8 @@ final class Test_TextFormat_proto3: XCTestCase, PBTestHelpers {
             (o: MessageTestType) in
             o.optionalFloat == 0.0
         }
+        assertTextFormatDecodeFails("optional_float: 1e inf\n")
+        assertTextFormatDecodeFails("optional_float: 1- nan\n")
         assertTextFormatEncode("optional_float: inf\n") { (o: inout MessageTestType) in o.optionalFloat = Float.infinity
         }
         assertTextFormatEncode("optional_float: -inf\n") { (o: inout MessageTestType) in
@@ -617,6 +619,13 @@ final class Test_TextFormat_proto3: XCTestCase, PBTestHelpers {
         assertTextFormatDecodeFails("optional_double: 1e5optional_int32: 1\n")
         assertTextFormatDecodeFails("optional_double: 1.5Foptional_int32: 1\n")
         assertTextFormatDecodeFails("optional_double: 1.5F9: 2\n")
+        // A malformed number must not be skipped over to reach a following
+        // "inf"/"nan" keyword.
+        assertTextFormatDecodeFails("optional_double: 1e inf\n")
+        assertTextFormatDecodeFails("optional_double: 1- nan\n")
+        assertTextFormatDecodeFails("optional_double: 1.2.3 -inf\n")
+        assertTextFormatDecodeFails("optional_double: 1ef infinity\n")
+        assertTextFormatDecodeFails("repeated_double: [1e inf]\n")
         assertTextFormatDecodeSucceeds("optional_double: 1e5#comment\noptional_int32: 1\n") { (o: MessageTestType) in
             o.optionalDouble == 100000 && o.optionalInt32 == 1
         }

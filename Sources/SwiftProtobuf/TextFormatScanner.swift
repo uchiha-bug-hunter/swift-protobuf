@@ -894,7 +894,7 @@ internal struct TextFormatScanner {
                 )
                 // Just skip the 'f'/'F'
                 p += 1
-                if isAlphanumericNext() {
+                guard let d = d, !isAlphanumericNext() else {
                     p = start
                     return nil
                 }
@@ -915,6 +915,12 @@ internal struct TextFormatScanner {
             ),
             finiteOnly: false
         )
+        guard let d = d else {
+            // Not a valid number; rewind so the caller doesn't resume
+            // parsing in the middle of the token.
+            p = start
+            return nil
+        }
         skipWhitespace()
         return d
     }
